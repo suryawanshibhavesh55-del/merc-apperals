@@ -1,4 +1,4 @@
-﻿
+
 /* --- src/config/siteConfig.js --- */
 /**
  * Central Configuration for Mer C. Apparels N Accessories E-Commerce System
@@ -6276,5 +6276,4 @@ if (document.readyState === 'loading') {
 } else {
   initApp();
 }
-
 

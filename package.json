@@ -4,7 +4,7 @@
   "description": "Mer C. Apparels N Accessories — Handcrafted Candles & Resin Art E-Commerce & Admin Platform",
   "type": "module",
   "scripts": {
-    "build": "powershell -ExecutionPolicy Bypass -File ./build_bundle.ps1",
+    "build": "node build.js",
     "dev": "node dev-server.js"
   },
   "dependencies": {

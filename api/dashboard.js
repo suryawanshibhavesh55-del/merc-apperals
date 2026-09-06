@@ -73,7 +73,15 @@ export default async function handler(req, res) {
       recentOrders
     });
   } catch (err) {
-    console.error('[Dashboard API Error]', err);
-    return res.status(500).json({ success: false, message: err.message });
+    console.error('[Dashboard API Error]', err.name || 'Error');
+    const rawMsg = err.message || '';
+    const isDbError = rawMsg === 'Database configuration is unavailable.' ||
+                      rawMsg.includes('mongodb') ||
+                      rawMsg.includes('Mongo') ||
+                      rawMsg.includes('scheme') ||
+                      rawMsg.includes('topology') ||
+                      rawMsg.includes('connection');
+    const safeMsg = isDbError ? 'Database configuration is unavailable.' : (rawMsg || 'Unable to load dashboard metrics.');
+    return res.status(500).json({ success: false, message: safeMsg });
   }
 }

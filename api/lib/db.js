@@ -8,42 +8,57 @@ import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 dotenv.config();
 
-const uri = process.env.MONGODB_URI;
-const dbName = process.env.MONGODB_DB_NAME || 'MERC';
-
-if (!uri) {
-  console.warn('[MongoDB] MONGODB_URI is not defined in environment variables.');
+/**
+ * Safely extracts and sanitizes the MongoDB URI from server environment variables.
+ * Handles whitespace and accidental wrapping quotes from dashboard copy-pasting.
+ * Validates scheme without logging or exposing credentials.
+ */
+function getSanitizedMongoUri() {
+  let uri = process.env.MONGODB_URI || process.env.MONGODB_URL || process.env.MONGO_URI || '';
+  if (typeof uri !== 'string') return '';
+  uri = uri.trim();
+  // Strip accidental wrapping quotes (single or double) from dashboard copy-paste
+  if ((uri.startsWith('"') && uri.endsWith('"')) || (uri.startsWith("'") && uri.endsWith("'"))) {
+    uri = uri.slice(1, -1).trim();
+  }
+  return uri;
 }
 
-let client;
-let clientPromise;
-
-function createClientPromise() {
-  const c = new MongoClient(uri, { serverSelectionTimeoutMS: 5000 });
-  const p = c.connect().catch(err => {
-    clientPromise = null;
-    if (typeof global !== 'undefined') global._mongoClientPromise = null;
-    throw err;
-  });
-  return p;
+function isMongoUriValid(uri) {
+  return Boolean(uri && (uri.startsWith('mongodb://') || uri.startsWith('mongodb+srv://')));
 }
 
 export async function getDatabase() {
-  if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
-    if (!global._mongoClientPromise) {
-      global._mongoClientPromise = createClientPromise();
-    }
-    clientPromise = global._mongoClientPromise;
-  } else {
-    if (!clientPromise) {
-      clientPromise = createClientPromise();
-    }
+  const uri = getSanitizedMongoUri();
+  const dbName = (process.env.MONGODB_DB_NAME || 'MERC').trim();
+
+  if (!isMongoUriValid(uri)) {
+    console.error('[MongoDB Error] MONGODB_URI is missing or does not start with "mongodb://" or "mongodb+srv://".');
+    throw new Error('Database configuration is unavailable.');
   }
 
-  const connectedClient = await clientPromise;
-  const db = connectedClient.db(dbName);
-  await ensureInitialSeeds(db);
-  return db;
+  // Reuse cached connection across serverless invocations (official Vercel pattern)
+  if (!global._mongoClientPromise) {
+    const client = new MongoClient(uri, {
+      serverSelectionTimeoutMS: 5000
+    });
+    global._mongoClientPromise = client.connect().catch(err => {
+      global._mongoClientPromise = null;
+      console.error('[MongoDB Connection Error] Failed to connect to cluster:', err.name || 'ConnectionFailed');
+      throw new Error('Database configuration is unavailable.');
+    });
+  }
+
+  try {
+    const connectedClient = await global._mongoClientPromise;
+    const db = connectedClient.db(dbName);
+    await ensureInitialSeeds(db);
+    return db;
+  } catch (err) {
+    global._mongoClientPromise = null;
+    console.error('[MongoDB Operation Error] Database cluster operation failed.');
+    throw new Error('Database configuration is unavailable.');
+  }
 }
 
 /**

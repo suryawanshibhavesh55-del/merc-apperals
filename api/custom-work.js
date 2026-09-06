@@ -65,7 +65,15 @@ export default async function handler(req, res) {
 
     return res.status(405).json({ success: false, message: 'Method not allowed.' });
   } catch (err) {
-    console.error('[Custom Work API Error]', err);
-    return res.status(500).json({ success: false, message: err.message });
+    console.error('[Custom Work API Error]', err.name || 'Error');
+    const rawMsg = err.message || '';
+    const isDbError = rawMsg === 'Database configuration is unavailable.' ||
+                      rawMsg.includes('mongodb') ||
+                      rawMsg.includes('Mongo') ||
+                      rawMsg.includes('scheme') ||
+                      rawMsg.includes('topology') ||
+                      rawMsg.includes('connection');
+    const safeMsg = isDbError ? 'Database configuration is unavailable.' : (rawMsg || 'Unable to load portfolio.');
+    return res.status(500).json({ success: false, message: safeMsg });
   }
 }

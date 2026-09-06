@@ -189,6 +189,14 @@ export default async function handler(req, res) {
         console.error('[Products Fallback Error]', fallbackErr);
       }
     }
-    return res.status(500).json({ success: false, message: err.message });
+    const rawMsg = err.message || '';
+    const isDbError = rawMsg === 'Database configuration is unavailable.' ||
+                      rawMsg.includes('mongodb') ||
+                      rawMsg.includes('Mongo') ||
+                      rawMsg.includes('scheme') ||
+                      rawMsg.includes('topology') ||
+                      rawMsg.includes('connection');
+    const safeMsg = isDbError ? 'Database configuration is unavailable.' : (rawMsg || 'Unable to process request.');
+    return res.status(500).json({ success: false, message: safeMsg });
   }
 }

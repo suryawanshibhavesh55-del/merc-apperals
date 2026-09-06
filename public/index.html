@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mer C. | Premium Handcrafted Candles & Resin Art</title>
+  <meta name="description" content="Discover premium handcrafted candles and artistic decor from Mer C. Apparels N Accessories. Thoughtfully designed pieces for gifting, celebrations and beautiful spaces.">
+  <meta name="keywords" content="Mer C, handcrafted candles, soy wax candles, urli candles, resin art, corporate gifting, luxury home decor, handmade candles India">
+
+  <!-- Open Graph Metadata -->
+  <meta property="og:title" content="Mer C. | Premium Handcrafted Candles & Resin Art">
+  <meta property="og:description" content="Thoughtfully designed handcrafted candles & resin art pieces for gifting, celebrations and beautiful spaces.">
+  <meta property="og:image" content="assets/candles_processed/botanical-multi-layer-floral-candle.jpeg">
+  <meta property="og:type" content="website">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕯️</text></svg>">
+
+  <!-- GOOGLE FONTS: Cormorant Garamond & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- TAILWIND CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            serif: ['Cormorant Garamond', 'Georgia', 'serif'],
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+          colors: {
+            aliceblue: '#F0F4F8',
+            navydark: '#0F172A',
+            navybutton: '#1E293B',
+            borderlight: '#E2E9F0',
+          },
+          keyframes: {
+            fadeIn: {
+              '0%': { opacity: '0', transform: 'scale(0.98)' },
+              '100%': { opacity: '1', transform: 'scale(1)' },
+            }
+          },
+          animation: {
+            fadeIn: 'fadeIn 0.25s ease-out forwards',
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Custom Luxury Styling & Smooth Scrollbars */
+    ::selection {
+      background-color: #0F172A;
+      color: #FFFFFF;
+    }
+    body {
+      background-color: #F0F4F8;
+      font-family: 'Inter', sans-serif;
+      color: #0F172A;
+      -webkit-font-smoothing: antialiased;
+    }
+    h1, h2, h3, h4, .font-serif {
+      font-family: 'Cormorant Garamond', Georgia, serif;
+    }
+  </style>
+</head>
+<body class="bg-[#F0F4F8] text-[#0F172A] min-h-screen">
+  
+  <!-- APP MOUNT CONTAINER -->
+  <div id="app"></div>
+
+  <!-- STANDALONE APPLICATION SCRIPT (Works on http:// and file:///) -->
+  <script src="bundle.js"></script>
+
+</body>
+</html>

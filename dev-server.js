@@ -118,7 +118,15 @@ const server = http.createServer(async (req, res) => {
   }
 
   const safePath = path.normalize(decodeURIComponent(pathname)).replace(/^(\.\.[\/\\])+/, '');
-  const filePath = path.join(PUBLIC_DIR, safePath);
+  const publicCandidate = path.join(PUBLIC_DIR, 'public', safePath);
+  const rootCandidate = path.join(PUBLIC_DIR, safePath);
+
+  let filePath = rootCandidate;
+  if (fs.existsSync(publicCandidate) && fs.statSync(publicCandidate).isFile()) {
+    filePath = publicCandidate;
+  } else if (fs.existsSync(rootCandidate) && fs.statSync(rootCandidate).isFile()) {
+    filePath = rootCandidate;
+  }
 
   fs.stat(filePath, (err, stats) => {
     if (err || !stats.isFile()) {

@@ -64,7 +64,37 @@ for (const relPath of files) {
   }
 }
 
-const outputPath = path.resolve(__dirname, 'bundle.js');
-fs.writeFileSync(outputPath, bundleContent, 'utf8');
+// 1. Output bundle.js to root directory (for local backwards compatibility)
+const rootOutputPath = path.resolve(__dirname, 'bundle.js');
+fs.writeFileSync(rootOutputPath, bundleContent, 'utf8');
+
+// 2. Prepare 'public' output directory for Vercel production deployment
+const publicDir = path.resolve(__dirname, 'public');
+if (!fs.existsSync(publicDir)) {
+  fs.mkdirSync(publicDir, { recursive: true });
+}
+
+// 3. Output bundle.js inside public/
+const publicBundlePath = path.join(publicDir, 'bundle.js');
+fs.writeFileSync(publicBundlePath, bundleContent, 'utf8');
+
+// 4. Copy index.html into public/
+const srcHtml = path.resolve(__dirname, 'index.html');
+const destHtml = path.join(publicDir, 'index.html');
+if (fs.existsSync(srcHtml)) {
+  fs.copyFileSync(srcHtml, destHtml);
+}
+
+// 5. Copy assets/ directory into public/assets/
+const srcAssets = path.resolve(__dirname, 'assets');
+const destAssets = path.join(publicDir, 'assets');
+if (fs.existsSync(srcAssets)) {
+  fs.cpSync(srcAssets, destAssets, { recursive: true, force: true });
+}
 
 console.log(`✓ Standalone bundle.js created successfully (${processedCount}/${files.length} modules bundled)!`);
+console.log(`✓ Output directory 'public' populated for Vercel deployment:`);
+console.log(`  - ${path.relative(__dirname, publicBundlePath)} (${(fs.statSync(publicBundlePath).size / 1024).toFixed(1)} KB)`);
+console.log(`  - ${path.relative(__dirname, destHtml)} (${(fs.statSync(destHtml).size / 1024).toFixed(1)} KB)`);
+console.log(`  - ${path.relative(__dirname, destAssets)} (static assets synchronized)`);
+

@@ -1,0 +1,17 @@
+{
+  "name": "mer-c-ecommerce",
+  "version": "1.0.0",
+  "description": "Mer C. Apparels N Accessories — Handcrafted Candles & Resin Art E-Commerce & Admin Platform",
+  "type": "module",
+  "scripts": {
+    "build": "powershell -ExecutionPolicy Bypass -File ./build_bundle.ps1",
+    "dev": "node dev-server.js"
+  },
+  "dependencies": {
+    "cloudinary": "^2.5.1",
+    "cookie": "^1.0.2",
+    "dotenv": "^16.4.7",
+    "jsonwebtoken": "^9.0.2",
+    "mongodb": "^6.12.0"
+  }
+}

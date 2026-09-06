@@ -1,7 +1,7 @@
 /**
  * Cross-Platform Production Bundler for Mer C.
- * Replaces platform-specific PowerShell build script.
- * Runs natively on Windows, macOS, Linux, and Vercel.
+ * Compiles and bundles application modules for production delivery.
+ * Native Node.js execution across Linux, macOS, Windows, and Vercel.
  */
 
 import fs from 'fs';

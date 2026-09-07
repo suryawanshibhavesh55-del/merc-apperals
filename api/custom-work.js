@@ -5,8 +5,8 @@
  * Admin POST/DELETE: Add/remove portfolio showcase items
  */
 
-import { getDatabase } from './lib/db.js';
-import { verifyAdminToken } from './lib/auth.js';
+import { getDatabase } from '../lib/db.js';
+import { verifyAdminToken } from '../lib/auth.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');

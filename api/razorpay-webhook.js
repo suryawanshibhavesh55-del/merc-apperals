@@ -4,8 +4,8 @@
  * Verifies x-razorpay-signature, idempotently updates order status, and keeps state in sync.
  */
 
-import { getDatabase } from './lib/db.js';
-import { verifyWebhookSignature } from './lib/razorpay.js';
+import { getDatabase } from '../lib/db.js';
+import { verifyWebhookSignature } from '../lib/razorpay.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {

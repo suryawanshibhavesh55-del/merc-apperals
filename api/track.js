@@ -5,7 +5,7 @@
  * Enforces strict customer isolation: customers can only view their own authenticated order.
  */
 
-import { getDatabase } from './lib/db.js';
+import { getDatabase } from '../lib/db.js';
 
 function escapeRegex(text) {
   return text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');

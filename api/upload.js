@@ -4,8 +4,8 @@
  * Streams uploaded image base64 directly to Cloudinary with ecommerce optimizations.
  */
 
-import { uploadToCloudinary } from './lib/cloudinary.js';
-import { verifyAdminToken } from './lib/auth.js';
+import { uploadToCloudinary } from '../lib/cloudinary.js';
+import { verifyAdminToken } from '../lib/auth.js';
 
 export const config = {
   api: {

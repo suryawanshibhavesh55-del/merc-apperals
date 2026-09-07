@@ -3,7 +3,7 @@
  * Handles Admin login, token verification, and logout.
  */
 
-import { verifyCredentials, generateToken, verifyAdminToken } from './lib/auth.js';
+import { verifyCredentials, generateToken, verifyAdminToken } from '../lib/auth.js';
 import cookie from 'cookie';
 
 export default async function handler(req, res) {

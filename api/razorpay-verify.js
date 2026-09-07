@@ -4,8 +4,8 @@
  * Enforces strict idempotency, prevents duplicate processing, decrements inventory, and updates MongoDB order to PAID.
  */
 
-import { getDatabase } from './lib/db.js';
-import { verifyPaymentSignature } from './lib/razorpay.js';
+import { getDatabase } from '../lib/db.js';
+import { verifyPaymentSignature } from '../lib/razorpay.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');

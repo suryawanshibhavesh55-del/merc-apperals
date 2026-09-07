@@ -2521,9 +2521,14 @@ function renderOrdersTab(orders, total, filter) {
                     <td class="p-3.5">${order.itemCount || (order.items ? order.items.length : 1)} items</td>
                     <td class="p-3.5 font-semibold text-[#0F172A]">&#8377;${order.totalAmount}</td>
                     <td class="p-3.5">
-                      <span class="text-[10px] font-semibold px-2 py-0.5 rounded ${order.paymentStatus === 'PAID' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-50 text-amber-800'}">
-                        ${order.paymentStatus}
-                      </span>
+                      <div class="space-y-0.5">
+                        <span class="text-[10px] font-semibold px-2 py-0.5 rounded inline-block ${order.paymentStatus === 'PAID' ? 'bg-emerald-100 text-emerald-800' : (order.paymentStatus === 'FAILED' ? 'bg-rose-100 text-rose-800' : 'bg-amber-50 text-amber-800')}">
+                          ${order.paymentStatus || 'PENDING'}
+                        </span>
+                        <div class="text-[9px] text-[#64748B] uppercase tracking-wider font-medium">
+                          ${order.paymentMethod === 'RAZORPAY' ? '⚡ Razorpay' : '💵 Cash on Delivery'}
+                        </div>
+                      </div>
                     </td>
                     <td class="p-3.5">
                       <span class="px-2 py-0.5 rounded text-[10px] font-semibold border ${getStatusBadge(order.status)}">
@@ -2661,6 +2666,44 @@ function renderOrderDetailDrawer(order) {
               <span>Total Paid/Due</span>
               <span>&#8377;${order.totalAmount}</span>
             </div>
+          </div>
+
+          <!-- PAYMENT & GATEWAY DETAILS -->
+          <div class="bg-[#F8FAFC] p-4 rounded-xl border border-[#E2E9F0] space-y-2 text-xs">
+            <span class="text-[10px] uppercase tracking-wider font-semibold text-[#64748B] block mb-1">Payment Information</span>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <span class="text-[10px] text-[#64748B] block">Method</span>
+                <span class="font-semibold text-[#0F172A]">${order.paymentMethod === 'RAZORPAY' ? '⚡ Razorpay Online' : '💵 Cash on Delivery'}</span>
+              </div>
+              <div>
+                <span class="text-[10px] text-[#64748B] block">Payment Status</span>
+                <span class="font-semibold ${order.paymentStatus === 'PAID' ? 'text-emerald-700' : (order.paymentStatus === 'FAILED' ? 'text-rose-700' : 'text-amber-700')}">
+                  ${order.paymentStatus || 'PENDING'} ${order.paymentStatus === 'PAID' ? '✓' : ''}
+                </span>
+              </div>
+            </div>
+
+            ${(order.razorpayOrderId || (order.payment && order.payment.razorpayOrderId)) ? `
+              <div class="pt-2 border-t border-[#CBD5E1] space-y-1">
+                <div class="flex justify-between">
+                  <span class="text-[10px] text-[#64748B]">Razorpay Order ID:</span>
+                  <span class="font-mono text-[11px] text-[#0F172A] font-medium">${order.razorpayOrderId || order.payment.razorpayOrderId}</span>
+                </div>
+                ${(order.razorpayPaymentId || (order.payment && order.payment.razorpayPaymentId)) ? `
+                  <div class="flex justify-between">
+                    <span class="text-[10px] text-[#64748B]">Razorpay Payment ID:</span>
+                    <span class="font-mono text-[11px] text-emerald-800 font-semibold">${order.razorpayPaymentId || order.payment.razorpayPaymentId}</span>
+                  </div>
+                ` : ''}
+                ${order.razorpaySignatureVerified || (order.payment && order.payment.signatureVerified) ? `
+                  <div class="flex justify-between">
+                    <span class="text-[10px] text-[#64748B]">Signature Verification:</span>
+                    <span class="text-[10px] text-emerald-700 font-bold">HMAC-SHA256 Verified ✓</span>
+                  </div>
+                ` : ''}
+              </div>
+            ` : ''}
           </div>
 
           <!-- EDITABLE COURIER DETAILS & NOTES FORM -->
@@ -3316,53 +3359,81 @@ function renderSettingsTab(settings) {
 /**
  * Payment Service Architecture
  * Modular payment gateway abstraction layer.
- * Ready for seamless Razorpay SDK integration without altering UI components.
+ * Client-side integration for Razorpay Standard Checkout & serverless verification.
  */
 
 
 
 const paymentService = {
   /**
-   * Process payment for customer checkout order
-   * @param {Object} orderDetails - Order items, totals, customer details
-   * @returns {Promise<Object>} Result object with status, transaction ID, and order details
+   * Opens Razorpay Standard Checkout modal
+   * @param {Object} razorpayPayload - { keyId, orderId, amount, currency, name, description, prefill }
+   * @param {string} localOrderId - Mer C. order ID (e.g. #MC1017)
+   * @returns {Promise<Object>} Verification response from /api/razorpay/verify
    */
-  async processPayment(orderDetails) {
-    console.log('[PaymentService] Processing payment via provider:', SITE_CONFIG.payment.provider);
-    console.log('[PaymentService] Order payload:', orderDetails);
-
-    // Simulate network API delay for payment gateway handshake
-    await new Promise(resolve => setTimeout(resolve, 1200));
-
-    // When Razorpay credentials are provided, replace this placeholder logic with:
-    /*
-    const options = {
-      key: "YOUR_RAZORPAY_KEY_ID",
-      amount: orderDetails.totalAmount * 100, // in paise
-      currency: "INR",
-      name: SITE_CONFIG.companyFullName,
-      description: "Order #" + orderDetails.orderId,
-      order_id: razorpayOrderId,
-      handler: function (response) {
-        // verify payment backend
+  openRazorpayCheckout(razorpayPayload, localOrderId) {
+    return new Promise((resolve, reject) => {
+      if (typeof window.Razorpay !== 'function') {
+        return reject(new Error('Razorpay SDK is not loaded. Please check your internet connection and refresh.'));
       }
-    };
-    const rzp = new window.Razorpay(options);
-    rzp.open();
-    */
 
-    // Placeholder Payment Handler Response
-    const mockTransactionId = "MERC_TXN_" + Math.random().toString(36).substring(2, 10).toUpperCase();
-    
-    return {
-      success: true,
-      status: "SUCCESS_PLACEHOLDER",
-      transactionId: mockTransactionId,
-      orderId: "MERC-" + Date.now().toString().slice(-6),
-      amount: orderDetails.totalAmount,
-      customer: orderDetails.customer,
-      message: "Order placed successfully! (Payment gateway integration placeholder)"
-    };
+      const options = {
+        key: razorpayPayload.keyId,
+        amount: razorpayPayload.amount,
+        currency: razorpayPayload.currency || 'INR',
+        name: razorpayPayload.name || 'Mer C.',
+        description: razorpayPayload.description || `Order ${localOrderId}`,
+        order_id: razorpayPayload.orderId,
+        prefill: razorpayPayload.prefill || {},
+        theme: {
+          color: '#0F172A' // Brand luxury dark navy
+        },
+        handler: async function (response) {
+          // Response contains: razorpay_payment_id, razorpay_order_id, razorpay_signature
+          try {
+            const verifyPayload = {
+              orderId: localOrderId,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature
+            };
+
+            const verifyRes = await fetch('/api/razorpay-verify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(verifyPayload)
+            });
+
+            const verifyData = await verifyRes.json();
+            if (verifyRes.ok && verifyData.success) {
+              resolve(verifyData);
+            } else {
+              reject(new Error(verifyData.message || 'Payment signature verification failed.'));
+            }
+          } catch (err) {
+            reject(new Error(err.message || 'Network error during payment verification.'));
+          }
+        },
+        modal: {
+          ondismiss: function () {
+            reject(new Error('PAYMENT_DISMISSED'));
+          },
+          escape: true,
+          backdropclose: false
+        }
+      };
+
+      try {
+        const rzp = new window.Razorpay(options);
+        rzp.on('payment.failed', function (resp) {
+          console.warn('[Razorpay Payment Failed]', resp.error);
+          reject(new Error(resp.error?.description || 'Payment was declined or failed.'));
+        });
+        rzp.open();
+      } catch (err) {
+        reject(err);
+      }
+    });
   }
 };
 
@@ -5072,15 +5143,25 @@ function CartDrawer(state) {
 
 /* --- src/components/CheckoutModal.js --- */
 /**
- * Checkout Flow Modal Component — Integrated with MongoDB Atlas Serverless API
- * Real order persistence to /api/orders with immutable product snapshots.
+ * Checkout Flow Modal Component — Integrated with Razorpay & MongoDB Atlas Serverless API
+ * Supports Razorpay Standard Checkout (Test/Live) and Cash on Delivery.
+ * Enforces server-side recalculation and ₹0 free delivery.
  */
 
 
 
+
 let currentStep = 'DETAILS'; // 'DETAILS' | 'CONFIRMATION'
+let selectedPaymentMethod = 'RAZORPAY'; // 'RAZORPAY' | 'CASH_ON_DELIVERY'
 let lastOrderResult = null;
 let isProcessing = false;
+let checkoutNotice = '';
+
+window.setCheckoutPaymentMethod = (method) => {
+  selectedPaymentMethod = method;
+  checkoutNotice = '';
+  cartStore.notify();
+};
 
 window.handleCheckoutSubmit = async (e) => {
   e.preventDefault();
@@ -5098,18 +5179,23 @@ window.handleCheckoutSubmit = async (e) => {
 
   const state = cartStore.getState();
   const subtotal = state.subtotal;
+  const paymentMethod = selectedPaymentMethod;
+  checkoutNotice = '';
+
   const orderPayload = {
     customer,
     items: state.cart,
     subtotal: subtotal,
     shipping: 0,
     totalAmount: subtotal,
-    paymentMethod: 'CASH_ON_DELIVERY'
+    paymentMethod
   };
 
   isProcessing = true;
   const btn = document.getElementById('checkout-submit-btn');
-  if (btn) btn.innerHTML = `<span class="animate-pulse">Placing Order in System...</span>`;
+  if (btn) {
+    btn.innerHTML = `<span class="animate-pulse">${paymentMethod === 'RAZORPAY' ? 'Preparing Secure Payment...' : 'Placing Order in System...'}</span>`;
+  }
 
   try {
     const res = await fetch('/api/orders', {
@@ -5120,35 +5206,64 @@ window.handleCheckoutSubmit = async (e) => {
 
     const result = await res.json();
 
-    if (result.success) {
+    if (!res.ok || !result.success) {
+      throw new Error(result.message || 'Unable to place order.');
+    }
+
+    // A. ONLINE PAYMENT VIA RAZORPAY STANDARD CHECKOUT
+    if (paymentMethod === 'RAZORPAY' && result.razorpay) {
+      if (btn) btn.innerHTML = `<span class="animate-pulse">Opening Razorpay Checkout...</span>`;
+
+      try {
+        const verifyResult = await paymentService.openRazorpayCheckout(result.razorpay, result.orderId);
+
+        lastOrderResult = {
+          orderId: result.orderId,
+          customer,
+          amount: state.total,
+          status: 'CONFIRMED',
+          paymentStatus: 'PAID',
+          paymentMethod: 'RAZORPAY',
+          transactionId: verifyResult.order?.razorpayPaymentId || result.razorpay.orderId
+        };
+
+        cartStore.clearCart();
+        currentStep = 'CONFIRMATION';
+        cartStore.notify();
+      } catch (rzpErr) {
+        console.warn('[Checkout Razorpay Flow]', rzpErr.message);
+        if (rzpErr.message === 'PAYMENT_DISMISSED') {
+          checkoutNotice = 'Payment was cancelled. You can retry with Razorpay or choose Cash on Delivery.';
+        } else {
+          checkoutNotice = rzpErr.message || 'Payment could not be completed. Please try again or choose Cash on Delivery.';
+        }
+        cartStore.notify();
+      }
+    } else {
+      // B. CASH ON DELIVERY (Immediate Order Confirmation)
       lastOrderResult = {
         orderId: result.orderId,
         customer,
         amount: state.total,
         status: 'NEW',
-        transactionId: 'TXN-' + Math.random().toString(36).substring(2, 9).toUpperCase()
+        paymentStatus: 'PENDING',
+        paymentMethod: 'CASH_ON_DELIVERY',
+        transactionId: 'COD-' + result.orderId.replace('#', '')
       };
+
       cartStore.clearCart();
       currentStep = 'CONFIRMATION';
       cartStore.notify();
-    } else {
-      alert("Checkout error: " + (result.message || 'Unable to place order.'));
     }
   } catch (err) {
-    // Graceful offline fallback simulation
-    console.warn('[Checkout API Warning]', err);
-    lastOrderResult = {
-      orderId: 'MERC-' + Date.now().toString().slice(-6),
-      customer,
-      amount: state.total,
-      status: 'NEW',
-      transactionId: 'OFFLINE_SIMULATION'
-    };
-    cartStore.clearCart();
-    currentStep = 'CONFIRMATION';
-    cartStore.notify();
+    alert('Checkout error: ' + (err.message || 'Unable to place order.'));
   } finally {
     isProcessing = false;
+    const currentBtn = document.getElementById('checkout-submit-btn');
+    if (currentBtn && currentStep !== 'CONFIRMATION') {
+      const state = cartStore.getState();
+      currentBtn.innerHTML = selectedPaymentMethod === 'RAZORPAY' ? `PAY NOW (&#8377;${state.total})` : `PLACE ORDER (&#8377;${state.total})`;
+    }
   }
 };
 
@@ -5182,8 +5297,21 @@ function CheckoutModal(state) {
             <div class="bg-[#F0F4F8] p-4 rounded-xl text-xs text-left space-y-2 text-[#334155] border border-[#E2E9F0] max-w-md mx-auto">
               <div class="flex justify-between"><span>Order Reference:</span> <strong class="font-mono text-[#0F172A]">${lastOrderResult.orderId}</strong></div>
               <div class="flex justify-between"><span>Total Amount:</span> <strong class="font-semibold text-[#0F172A]">&#8377;${lastOrderResult.amount}</strong></div>
+              <div class="flex justify-between">
+                <span>Payment Method:</span> 
+                <span class="font-semibold text-[#0F172A]">${lastOrderResult.paymentMethod === 'RAZORPAY' ? 'Razorpay Online' : 'Cash on Delivery'}</span>
+              </div>
+              <div class="flex justify-between">
+                <span>Payment Status:</span> 
+                <span class="${lastOrderResult.paymentStatus === 'PAID' ? 'text-emerald-700 font-bold' : 'text-amber-700 font-semibold'}">
+                  ${lastOrderResult.paymentStatus === 'PAID' ? 'PAID ONLINE (Verified ✓)' : 'CASH ON DELIVERY (Pending)'}
+                </span>
+              </div>
+              ${lastOrderResult.transactionId ? `
+                <div class="flex justify-between"><span>Transaction ID:</span> <span class="font-mono text-[#475569]">${lastOrderResult.transactionId}</span></div>
+              ` : ''}
               <div class="flex justify-between"><span>Delivery Address:</span> <span>${lastOrderResult.customer.city || ''} ${lastOrderResult.customer.pincode ? `(${lastOrderResult.customer.pincode})` : ''}</span></div>
-              <div class="flex justify-between"><span>Status:</span> <span class="text-blue-700 font-semibold">Registered (Awaiting fulfillment)</span></div>
+              <div class="flex justify-between"><span>Fulfillment:</span> <span class="text-blue-700 font-semibold">Registered (Awaiting fulfillment)</span></div>
             </div>
 
             <p class="text-xs text-[#334155] bg-white border border-[#CBD5E1] p-3 rounded-lg max-w-md mx-auto">
@@ -5223,13 +5351,20 @@ function CheckoutModal(state) {
               </div>
               <div class="flex justify-between">
                 <span>Delivery</span>
-                <span class="text-emerald-700 font-semibold">FREE</span>
+                <span class="text-emerald-700 font-semibold">FREE (&#8377;0)</span>
               </div>
               <div class="flex justify-between font-serif text-lg font-bold text-[#0F172A] pt-2 border-t border-[#CBD5E1]">
                 <span>Total</span>
                 <span>&#8377;${subtotal}</span>
               </div>
             </div>
+
+            ${checkoutNotice ? `
+              <div class="mb-4 p-3.5 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl text-xs flex items-start space-x-2">
+                <span class="text-amber-600 font-bold">⚠️</span>
+                <div>${checkoutNotice}</div>
+              </div>
+            ` : ''}
 
             <form id="checkout-form" onsubmit="handleCheckoutSubmit(event)" class="space-y-4">
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -5261,12 +5396,47 @@ function CheckoutModal(state) {
                 <div>
                   <label class="block text-xs font-semibold uppercase text-[#475569] mb-1">City</label>
                   <input type="text" name="city" required placeholder="Mumbai / Pune" 
-                          class="w-full px-3.5 py-2.5 text-sm bg-white border border-[#CBD5E1] rounded focus:ring-2 focus:ring-[#0F172A] text-[#0F172A]">
+                         class="w-full px-3.5 py-2.5 text-sm bg-white border border-[#CBD5E1] rounded focus:ring-2 focus:ring-[#0F172A] text-[#0F172A]">
                 </div>
                 <div>
                   <label class="block text-xs font-semibold uppercase text-[#475569] mb-1">Pincode</label>
                   <input type="text" name="pincode" required placeholder="400001" 
-                          class="w-full px-3.5 py-2.5 text-sm bg-white border border-[#CBD5E1] rounded focus:ring-2 focus:ring-[#0F172A] text-[#0F172A]">
+                         class="w-full px-3.5 py-2.5 text-sm bg-white border border-[#CBD5E1] rounded focus:ring-2 focus:ring-[#0F172A] text-[#0F172A]">
+                </div>
+              </div>
+
+              <!-- PAYMENT METHOD SELECTION -->
+              <div class="pt-2">
+                <label class="block text-xs font-semibold uppercase text-[#475569] mb-2">Select Payment Method</label>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  
+                  <!-- RAZORPAY ONLINE OPTION -->
+                  <label class="flex items-start p-3.5 border rounded-xl cursor-pointer transition-all ${selectedPaymentMethod === 'RAZORPAY' ? 'border-[#0F172A] bg-slate-50 ring-1 ring-[#0F172A]' : 'border-[#CBD5E1] bg-white hover:bg-slate-50'}">
+                    <input type="radio" name="paymentMethodRadio" value="RAZORPAY" 
+                           ${selectedPaymentMethod === 'RAZORPAY' ? 'checked' : ''} 
+                           onchange="window.setCheckoutPaymentMethod('RAZORPAY')" 
+                           class="mt-0.5 text-[#0F172A] focus:ring-[#0F172A] mr-3">
+                    <div class="min-w-0 flex-1">
+                      <div class="font-semibold text-xs text-[#0F172A] flex items-center justify-between">
+                        <span>Online Payment</span>
+                        <span class="text-[9px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded">Razorpay</span>
+                      </div>
+                      <div class="text-[11px] text-[#64748B] mt-0.5">UPI, Cards, NetBanking (Test Mode)</div>
+                    </div>
+                  </label>
+
+                  <!-- CASH ON DELIVERY OPTION -->
+                  <label class="flex items-start p-3.5 border rounded-xl cursor-pointer transition-all ${selectedPaymentMethod === 'CASH_ON_DELIVERY' ? 'border-[#0F172A] bg-slate-50 ring-1 ring-[#0F172A]' : 'border-[#CBD5E1] bg-white hover:bg-slate-50'}">
+                    <input type="radio" name="paymentMethodRadio" value="CASH_ON_DELIVERY" 
+                           ${selectedPaymentMethod === 'CASH_ON_DELIVERY' ? 'checked' : ''} 
+                           onchange="window.setCheckoutPaymentMethod('CASH_ON_DELIVERY')" 
+                           class="mt-0.5 text-[#0F172A] focus:ring-[#0F172A] mr-3">
+                    <div class="min-w-0 flex-1">
+                      <div class="font-semibold text-xs text-[#0F172A]">Cash on Delivery</div>
+                      <div class="text-[11px] text-[#64748B] mt-0.5">Pay in cash when order is delivered</div>
+                    </div>
+                  </label>
+
                 </div>
               </div>
 
@@ -5274,14 +5444,16 @@ function CheckoutModal(state) {
                 <button type="submit" 
                         id="checkout-submit-btn"
                         class="w-full py-4 bg-[#1E293B] text-white text-xs uppercase tracking-[0.2em] font-semibold rounded hover:bg-[#334155] transition-colors shadow-md">
-                  PLACE ORDER (&#8377;${total})
+                  ${selectedPaymentMethod === 'RAZORPAY' ? `PAY NOW (&#8377;${total})` : `PLACE ORDER (&#8377;${total})`}
                 </button>
+                <div class="text-[10px] text-center text-[#64748B] mt-2">
+                  🔒 256-Bit Encrypted Secure Checkout • 100% Free Delivery Pan-India
+                </div>
               </div>
             </form>
           </div>
         `}
 
-      </div>
     </div>
   `;
 }

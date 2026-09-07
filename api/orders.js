@@ -6,6 +6,7 @@
 
 import { getDatabase } from './lib/db.js';
 import { verifyAdminToken } from './lib/auth.js';
+import { createRazorpayOrder, getRazorpayKeys } from './lib/razorpay.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -82,6 +83,22 @@ export default async function handler(req, res) {
       const subtotal = calculatedSubtotal;
       const shipping = 0; // Strict Business Rule: Delivery charge is ALWAYS ₹0
       const totalAmount = calculatedSubtotal; // Final customer payable amount = subtotal + ₹0 delivery
+      const isRazorpay = String(data.paymentMethod || '').toUpperCase() === 'RAZORPAY';
+
+      let rzpOrder = null;
+      if (isRazorpay) {
+        const amountInPaise = Math.round(totalAmount * 100);
+        rzpOrder = await createRazorpayOrder({
+          amount: amountInPaise,
+          currency: 'INR',
+          receipt: orderId,
+          notes: {
+            orderId,
+            customerEmail: data.customer.email || '',
+            customerPhone: data.customer.phone || ''
+          }
+        });
+      }
 
       const orderDocument = {
         orderId,
@@ -99,9 +116,17 @@ export default async function handler(req, res) {
         shipping,
         discount: 0,
         totalAmount,
-        status: 'NEW', // NEW | CONFIRMED | PROCESSING | PACKED | SHIPPED | OUT_FOR_DELIVERY | DELIVERED | CANCELLED
+        status: isRazorpay ? 'PENDING_PAYMENT' : 'NEW', // PENDING_PAYMENT | NEW | CONFIRMED | PROCESSING | PACKED | SHIPPED | OUT_FOR_DELIVERY | DELIVERED | CANCELLED
         paymentStatus: 'PENDING', // PENDING | PAID | FAILED | REFUNDED
-        paymentMethod: data.paymentMethod || 'CASH_ON_DELIVERY',
+        paymentMethod: isRazorpay ? 'RAZORPAY' : 'CASH_ON_DELIVERY',
+        razorpayOrderId: rzpOrder ? rzpOrder.id : '',
+        payment: {
+          method: isRazorpay ? 'razorpay' : 'cash_on_delivery',
+          status: 'pending',
+          razorpayOrderId: rzpOrder ? rzpOrder.id : '',
+          razorpayPaymentId: '',
+          signatureVerified: false
+        },
         shippingStatus: 'PENDING',
         courierName: '',
         trackingNumber: '',
@@ -122,22 +147,43 @@ export default async function handler(req, res) {
 
       await ordersCollection.insertOne(orderDocument);
 
-      // Decrement stock for ordered items
-      for (const item of itemsSnapshot) {
-        if (item.productId && item.productId !== 'custom') {
-          await productsCollection.updateOne(
-            { id: item.productId, stock: { $gt: 0 } },
-            { $inc: { stock: -item.quantity }, $set: { updatedAt: new Date() } }
-          );
+      // For COD orders, decrement stock immediately. For Razorpay, stock is decremented upon payment verification.
+      if (!isRazorpay) {
+        for (const item of itemsSnapshot) {
+          if (item.productId && item.productId !== 'custom') {
+            await productsCollection.updateOne(
+              { id: item.productId, stock: { $gt: 0 } },
+              { $inc: { stock: -item.quantity }, $set: { updatedAt: new Date() } }
+            );
+          }
         }
       }
 
-      return res.status(201).json({
+      const responsePayload = {
         success: true,
-        message: 'Order created successfully.',
+        message: isRazorpay ? 'Order initiated for Razorpay payment.' : 'Order created successfully.',
         orderId,
         order: orderDocument
-      });
+      };
+
+      if (isRazorpay && rzpOrder) {
+        const { keyId } = getRazorpayKeys();
+        responsePayload.razorpay = {
+          keyId,
+          orderId: rzpOrder.id,
+          amount: rzpOrder.amount,
+          currency: rzpOrder.currency || 'INR',
+          name: 'Mer C.',
+          description: `Order ${orderId}`,
+          prefill: {
+            name: orderDocument.customer.name,
+            email: orderDocument.customer.email,
+            contact: orderDocument.customer.phone
+          }
+        };
+      }
+
+      return res.status(201).json(responsePayload);
     }
 
     // 2. GET: Admin retrieves orders with search, filter, and pagination

@@ -288,3 +288,4 @@ async function ensureInitialSeeds(db) {
     console.warn('[MongoDB Seed Error]', err.message);
   }
 }
+

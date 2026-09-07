@@ -717,9 +717,14 @@ function renderOrdersTab(orders, total, filter) {
                     <td class="p-3.5">${order.itemCount || (order.items ? order.items.length : 1)} items</td>
                     <td class="p-3.5 font-semibold text-[#0F172A]">&#8377;${order.totalAmount}</td>
                     <td class="p-3.5">
-                      <span class="text-[10px] font-semibold px-2 py-0.5 rounded ${order.paymentStatus === 'PAID' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-50 text-amber-800'}">
-                        ${order.paymentStatus}
-                      </span>
+                      <div class="space-y-0.5">
+                        <span class="text-[10px] font-semibold px-2 py-0.5 rounded inline-block ${order.paymentStatus === 'PAID' ? 'bg-emerald-100 text-emerald-800' : (order.paymentStatus === 'FAILED' ? 'bg-rose-100 text-rose-800' : 'bg-amber-50 text-amber-800')}">
+                          ${order.paymentStatus || 'PENDING'}
+                        </span>
+                        <div class="text-[9px] text-[#64748B] uppercase tracking-wider font-medium">
+                          ${order.paymentMethod === 'RAZORPAY' ? '⚡ Razorpay' : '💵 Cash on Delivery'}
+                        </div>
+                      </div>
                     </td>
                     <td class="p-3.5">
                       <span class="px-2 py-0.5 rounded text-[10px] font-semibold border ${getStatusBadge(order.status)}">
@@ -857,6 +862,44 @@ function renderOrderDetailDrawer(order) {
               <span>Total Paid/Due</span>
               <span>&#8377;${order.totalAmount}</span>
             </div>
+          </div>
+
+          <!-- PAYMENT & GATEWAY DETAILS -->
+          <div class="bg-[#F8FAFC] p-4 rounded-xl border border-[#E2E9F0] space-y-2 text-xs">
+            <span class="text-[10px] uppercase tracking-wider font-semibold text-[#64748B] block mb-1">Payment Information</span>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <span class="text-[10px] text-[#64748B] block">Method</span>
+                <span class="font-semibold text-[#0F172A]">${order.paymentMethod === 'RAZORPAY' ? '⚡ Razorpay Online' : '💵 Cash on Delivery'}</span>
+              </div>
+              <div>
+                <span class="text-[10px] text-[#64748B] block">Payment Status</span>
+                <span class="font-semibold ${order.paymentStatus === 'PAID' ? 'text-emerald-700' : (order.paymentStatus === 'FAILED' ? 'text-rose-700' : 'text-amber-700')}">
+                  ${order.paymentStatus || 'PENDING'} ${order.paymentStatus === 'PAID' ? '✓' : ''}
+                </span>
+              </div>
+            </div>
+
+            ${(order.razorpayOrderId || (order.payment && order.payment.razorpayOrderId)) ? `
+              <div class="pt-2 border-t border-[#CBD5E1] space-y-1">
+                <div class="flex justify-between">
+                  <span class="text-[10px] text-[#64748B]">Razorpay Order ID:</span>
+                  <span class="font-mono text-[11px] text-[#0F172A] font-medium">${order.razorpayOrderId || order.payment.razorpayOrderId}</span>
+                </div>
+                ${(order.razorpayPaymentId || (order.payment && order.payment.razorpayPaymentId)) ? `
+                  <div class="flex justify-between">
+                    <span class="text-[10px] text-[#64748B]">Razorpay Payment ID:</span>
+                    <span class="font-mono text-[11px] text-emerald-800 font-semibold">${order.razorpayPaymentId || order.payment.razorpayPaymentId}</span>
+                  </div>
+                ` : ''}
+                ${order.razorpaySignatureVerified || (order.payment && order.payment.signatureVerified) ? `
+                  <div class="flex justify-between">
+                    <span class="text-[10px] text-[#64748B]">Signature Verification:</span>
+                    <span class="text-[10px] text-emerald-700 font-bold">HMAC-SHA256 Verified ✓</span>
+                  </div>
+                ` : ''}
+              </div>
+            ` : ''}
           </div>
 
           <!-- EDITABLE COURIER DETAILS & NOTES FORM -->

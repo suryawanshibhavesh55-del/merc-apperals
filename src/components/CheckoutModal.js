@@ -1,13 +1,23 @@
 /**
- * Checkout Flow Modal Component — Integrated with MongoDB Atlas Serverless API
- * Real order persistence to /api/orders with immutable product snapshots.
+ * Checkout Flow Modal Component — Integrated with Razorpay & MongoDB Atlas Serverless API
+ * Supports Razorpay Standard Checkout (Test/Live) and Cash on Delivery.
+ * Enforces server-side recalculation and ₹0 free delivery.
  */
 
 import { cartStore } from '../context/CartState.js';
+import { paymentService } from '../services/paymentService.js';
 
 let currentStep = 'DETAILS'; // 'DETAILS' | 'CONFIRMATION'
+let selectedPaymentMethod = 'RAZORPAY'; // 'RAZORPAY' | 'CASH_ON_DELIVERY'
 let lastOrderResult = null;
 let isProcessing = false;
+let checkoutNotice = '';
+
+window.setCheckoutPaymentMethod = (method) => {
+  selectedPaymentMethod = method;
+  checkoutNotice = '';
+  cartStore.notify();
+};
 
 window.handleCheckoutSubmit = async (e) => {
   e.preventDefault();
@@ -25,18 +35,23 @@ window.handleCheckoutSubmit = async (e) => {
 
   const state = cartStore.getState();
   const subtotal = state.subtotal;
+  const paymentMethod = selectedPaymentMethod;
+  checkoutNotice = '';
+
   const orderPayload = {
     customer,
     items: state.cart,
     subtotal: subtotal,
     shipping: 0,
     totalAmount: subtotal,
-    paymentMethod: 'CASH_ON_DELIVERY'
+    paymentMethod
   };
 
   isProcessing = true;
   const btn = document.getElementById('checkout-submit-btn');
-  if (btn) btn.innerHTML = `<span class="animate-pulse">Placing Order in System...</span>`;
+  if (btn) {
+    btn.innerHTML = `<span class="animate-pulse">${paymentMethod === 'RAZORPAY' ? 'Preparing Secure Payment...' : 'Placing Order in System...'}</span>`;
+  }
 
   try {
     const res = await fetch('/api/orders', {
@@ -47,35 +62,64 @@ window.handleCheckoutSubmit = async (e) => {
 
     const result = await res.json();
 
-    if (result.success) {
+    if (!res.ok || !result.success) {
+      throw new Error(result.message || 'Unable to place order.');
+    }
+
+    // A. ONLINE PAYMENT VIA RAZORPAY STANDARD CHECKOUT
+    if (paymentMethod === 'RAZORPAY' && result.razorpay) {
+      if (btn) btn.innerHTML = `<span class="animate-pulse">Opening Razorpay Checkout...</span>`;
+
+      try {
+        const verifyResult = await paymentService.openRazorpayCheckout(result.razorpay, result.orderId);
+
+        lastOrderResult = {
+          orderId: result.orderId,
+          customer,
+          amount: state.total,
+          status: 'CONFIRMED',
+          paymentStatus: 'PAID',
+          paymentMethod: 'RAZORPAY',
+          transactionId: verifyResult.order?.razorpayPaymentId || result.razorpay.orderId
+        };
+
+        cartStore.clearCart();
+        currentStep = 'CONFIRMATION';
+        cartStore.notify();
+      } catch (rzpErr) {
+        console.warn('[Checkout Razorpay Flow]', rzpErr.message);
+        if (rzpErr.message === 'PAYMENT_DISMISSED') {
+          checkoutNotice = 'Payment was cancelled. You can retry with Razorpay or choose Cash on Delivery.';
+        } else {
+          checkoutNotice = rzpErr.message || 'Payment could not be completed. Please try again or choose Cash on Delivery.';
+        }
+        cartStore.notify();
+      }
+    } else {
+      // B. CASH ON DELIVERY (Immediate Order Confirmation)
       lastOrderResult = {
         orderId: result.orderId,
         customer,
         amount: state.total,
         status: 'NEW',
-        transactionId: 'TXN-' + Math.random().toString(36).substring(2, 9).toUpperCase()
+        paymentStatus: 'PENDING',
+        paymentMethod: 'CASH_ON_DELIVERY',
+        transactionId: 'COD-' + result.orderId.replace('#', '')
       };
+
       cartStore.clearCart();
       currentStep = 'CONFIRMATION';
       cartStore.notify();
-    } else {
-      alert("Checkout error: " + (result.message || 'Unable to place order.'));
     }
   } catch (err) {
-    // Graceful offline fallback simulation
-    console.warn('[Checkout API Warning]', err);
-    lastOrderResult = {
-      orderId: 'MERC-' + Date.now().toString().slice(-6),
-      customer,
-      amount: state.total,
-      status: 'NEW',
-      transactionId: 'OFFLINE_SIMULATION'
-    };
-    cartStore.clearCart();
-    currentStep = 'CONFIRMATION';
-    cartStore.notify();
+    alert('Checkout error: ' + (err.message || 'Unable to place order.'));
   } finally {
     isProcessing = false;
+    const currentBtn = document.getElementById('checkout-submit-btn');
+    if (currentBtn && currentStep !== 'CONFIRMATION') {
+      const state = cartStore.getState();
+      currentBtn.innerHTML = selectedPaymentMethod === 'RAZORPAY' ? `PAY NOW (&#8377;${state.total})` : `PLACE ORDER (&#8377;${state.total})`;
+    }
   }
 };
 
@@ -109,8 +153,21 @@ export function CheckoutModal(state) {
             <div class="bg-[#F0F4F8] p-4 rounded-xl text-xs text-left space-y-2 text-[#334155] border border-[#E2E9F0] max-w-md mx-auto">
               <div class="flex justify-between"><span>Order Reference:</span> <strong class="font-mono text-[#0F172A]">${lastOrderResult.orderId}</strong></div>
               <div class="flex justify-between"><span>Total Amount:</span> <strong class="font-semibold text-[#0F172A]">&#8377;${lastOrderResult.amount}</strong></div>
+              <div class="flex justify-between">
+                <span>Payment Method:</span> 
+                <span class="font-semibold text-[#0F172A]">${lastOrderResult.paymentMethod === 'RAZORPAY' ? 'Razorpay Online' : 'Cash on Delivery'}</span>
+              </div>
+              <div class="flex justify-between">
+                <span>Payment Status:</span> 
+                <span class="${lastOrderResult.paymentStatus === 'PAID' ? 'text-emerald-700 font-bold' : 'text-amber-700 font-semibold'}">
+                  ${lastOrderResult.paymentStatus === 'PAID' ? 'PAID ONLINE (Verified ✓)' : 'CASH ON DELIVERY (Pending)'}
+                </span>
+              </div>
+              ${lastOrderResult.transactionId ? `
+                <div class="flex justify-between"><span>Transaction ID:</span> <span class="font-mono text-[#475569]">${lastOrderResult.transactionId}</span></div>
+              ` : ''}
               <div class="flex justify-between"><span>Delivery Address:</span> <span>${lastOrderResult.customer.city || ''} ${lastOrderResult.customer.pincode ? `(${lastOrderResult.customer.pincode})` : ''}</span></div>
-              <div class="flex justify-between"><span>Status:</span> <span class="text-blue-700 font-semibold">Registered (Awaiting fulfillment)</span></div>
+              <div class="flex justify-between"><span>Fulfillment:</span> <span class="text-blue-700 font-semibold">Registered (Awaiting fulfillment)</span></div>
             </div>
 
             <p class="text-xs text-[#334155] bg-white border border-[#CBD5E1] p-3 rounded-lg max-w-md mx-auto">
@@ -150,13 +207,20 @@ export function CheckoutModal(state) {
               </div>
               <div class="flex justify-between">
                 <span>Delivery</span>
-                <span class="text-emerald-700 font-semibold">FREE</span>
+                <span class="text-emerald-700 font-semibold">FREE (&#8377;0)</span>
               </div>
               <div class="flex justify-between font-serif text-lg font-bold text-[#0F172A] pt-2 border-t border-[#CBD5E1]">
                 <span>Total</span>
                 <span>&#8377;${subtotal}</span>
               </div>
             </div>
+
+            ${checkoutNotice ? `
+              <div class="mb-4 p-3.5 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl text-xs flex items-start space-x-2">
+                <span class="text-amber-600 font-bold">⚠️</span>
+                <div>${checkoutNotice}</div>
+              </div>
+            ` : ''}
 
             <form id="checkout-form" onsubmit="handleCheckoutSubmit(event)" class="space-y-4">
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -188,12 +252,47 @@ export function CheckoutModal(state) {
                 <div>
                   <label class="block text-xs font-semibold uppercase text-[#475569] mb-1">City</label>
                   <input type="text" name="city" required placeholder="Mumbai / Pune" 
-                          class="w-full px-3.5 py-2.5 text-sm bg-white border border-[#CBD5E1] rounded focus:ring-2 focus:ring-[#0F172A] text-[#0F172A]">
+                         class="w-full px-3.5 py-2.5 text-sm bg-white border border-[#CBD5E1] rounded focus:ring-2 focus:ring-[#0F172A] text-[#0F172A]">
                 </div>
                 <div>
                   <label class="block text-xs font-semibold uppercase text-[#475569] mb-1">Pincode</label>
                   <input type="text" name="pincode" required placeholder="400001" 
-                          class="w-full px-3.5 py-2.5 text-sm bg-white border border-[#CBD5E1] rounded focus:ring-2 focus:ring-[#0F172A] text-[#0F172A]">
+                         class="w-full px-3.5 py-2.5 text-sm bg-white border border-[#CBD5E1] rounded focus:ring-2 focus:ring-[#0F172A] text-[#0F172A]">
+                </div>
+              </div>
+
+              <!-- PAYMENT METHOD SELECTION -->
+              <div class="pt-2">
+                <label class="block text-xs font-semibold uppercase text-[#475569] mb-2">Select Payment Method</label>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  
+                  <!-- RAZORPAY ONLINE OPTION -->
+                  <label class="flex items-start p-3.5 border rounded-xl cursor-pointer transition-all ${selectedPaymentMethod === 'RAZORPAY' ? 'border-[#0F172A] bg-slate-50 ring-1 ring-[#0F172A]' : 'border-[#CBD5E1] bg-white hover:bg-slate-50'}">
+                    <input type="radio" name="paymentMethodRadio" value="RAZORPAY" 
+                           ${selectedPaymentMethod === 'RAZORPAY' ? 'checked' : ''} 
+                           onchange="window.setCheckoutPaymentMethod('RAZORPAY')" 
+                           class="mt-0.5 text-[#0F172A] focus:ring-[#0F172A] mr-3">
+                    <div class="min-w-0 flex-1">
+                      <div class="font-semibold text-xs text-[#0F172A] flex items-center justify-between">
+                        <span>Online Payment</span>
+                        <span class="text-[9px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded">Razorpay</span>
+                      </div>
+                      <div class="text-[11px] text-[#64748B] mt-0.5">UPI, Cards, NetBanking (Test Mode)</div>
+                    </div>
+                  </label>
+
+                  <!-- CASH ON DELIVERY OPTION -->
+                  <label class="flex items-start p-3.5 border rounded-xl cursor-pointer transition-all ${selectedPaymentMethod === 'CASH_ON_DELIVERY' ? 'border-[#0F172A] bg-slate-50 ring-1 ring-[#0F172A]' : 'border-[#CBD5E1] bg-white hover:bg-slate-50'}">
+                    <input type="radio" name="paymentMethodRadio" value="CASH_ON_DELIVERY" 
+                           ${selectedPaymentMethod === 'CASH_ON_DELIVERY' ? 'checked' : ''} 
+                           onchange="window.setCheckoutPaymentMethod('CASH_ON_DELIVERY')" 
+                           class="mt-0.5 text-[#0F172A] focus:ring-[#0F172A] mr-3">
+                    <div class="min-w-0 flex-1">
+                      <div class="font-semibold text-xs text-[#0F172A]">Cash on Delivery</div>
+                      <div class="text-[11px] text-[#64748B] mt-0.5">Pay in cash when order is delivered</div>
+                    </div>
+                  </label>
+
                 </div>
               </div>
 
@@ -201,14 +300,16 @@ export function CheckoutModal(state) {
                 <button type="submit" 
                         id="checkout-submit-btn"
                         class="w-full py-4 bg-[#1E293B] text-white text-xs uppercase tracking-[0.2em] font-semibold rounded hover:bg-[#334155] transition-colors shadow-md">
-                  PLACE ORDER (&#8377;${total})
+                  ${selectedPaymentMethod === 'RAZORPAY' ? `PAY NOW (&#8377;${total})` : `PLACE ORDER (&#8377;${total})`}
                 </button>
+                <div class="text-[10px] text-center text-[#64748B] mt-2">
+                  🔒 256-Bit Encrypted Secure Checkout • 100% Free Delivery Pan-India
+                </div>
               </div>
             </form>
           </div>
         `}
 
-      </div>
     </div>
   `;
 }

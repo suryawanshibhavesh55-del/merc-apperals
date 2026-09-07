@@ -25,6 +25,8 @@ import customWorkHandler from './api/custom-work.js';
 import dashboardHandler from './api/dashboard.js';
 import settingsHandler from './api/settings.js';
 import trackHandler from './api/track.js';
+import razorpayVerifyHandler from './api/razorpay-verify.js';
+import razorpayWebhookHandler from './api/razorpay-webhook.js';
 
 const apiRoutes = {
   '/api/auth': authHandler,
@@ -34,7 +36,11 @@ const apiRoutes = {
   '/api/upload': uploadHandler,
   '/api/custom-work': customWorkHandler,
   '/api/dashboard': dashboardHandler,
-  '/api/settings': settingsHandler
+  '/api/settings': settingsHandler,
+  '/api/razorpay/verify': razorpayVerifyHandler,
+  '/api/razorpay/webhook': razorpayWebhookHandler,
+  '/api/razorpay-verify': razorpayVerifyHandler,
+  '/api/razorpay-webhook': razorpayWebhookHandler
 };
 
 const mimeTypes = {
@@ -82,6 +88,7 @@ const server = http.createServer(async (req, res) => {
         bodyData += chunk.toString();
       });
       req.on('end', async () => {
+        req.rawBody = bodyData;
         try {
           req.body = bodyData ? JSON.parse(bodyData) : {};
         } catch {

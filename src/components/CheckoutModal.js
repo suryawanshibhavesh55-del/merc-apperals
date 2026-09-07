@@ -1,6 +1,6 @@
 /**
  * Checkout Flow Modal Component — Integrated with Razorpay & MongoDB Atlas Serverless API
- * Supports Razorpay Standard Checkout (Test/Live) and Cash on Delivery.
+ * Supports Razorpay Standard Checkout (Online Payment).
  * Enforces server-side recalculation and ₹0 free delivery.
  */
 
@@ -8,14 +8,13 @@ import { cartStore } from '../context/CartState.js';
 import { paymentService } from '../services/paymentService.js';
 
 let currentStep = 'DETAILS'; // 'DETAILS' | 'CONFIRMATION'
-let selectedPaymentMethod = 'RAZORPAY'; // 'RAZORPAY' | 'CASH_ON_DELIVERY'
+const selectedPaymentMethod = 'RAZORPAY'; // Razorpay is the exclusive payment method
 let lastOrderResult = null;
 let isProcessing = false;
 let checkoutNotice = '';
 
-window.setCheckoutPaymentMethod = (method) => {
-  selectedPaymentMethod = method;
-  checkoutNotice = '';
+window.setCheckoutPaymentMethod = () => {
+  // Maintained for backward compatibility; Razorpay is the only payment method
   cartStore.notify();
 };
 
@@ -35,7 +34,7 @@ window.handleCheckoutSubmit = async (e) => {
 
   const state = cartStore.getState();
   const subtotal = state.subtotal;
-  const paymentMethod = selectedPaymentMethod;
+  const paymentMethod = 'RAZORPAY';
   checkoutNotice = '';
 
   const orderPayload = {
@@ -44,13 +43,13 @@ window.handleCheckoutSubmit = async (e) => {
     subtotal: subtotal,
     shipping: 0,
     totalAmount: subtotal,
-    paymentMethod
+    paymentMethod: 'RAZORPAY'
   };
 
   isProcessing = true;
   const btn = document.getElementById('checkout-submit-btn');
   if (btn) {
-    btn.innerHTML = `<span class="animate-pulse">${paymentMethod === 'RAZORPAY' ? 'Preparing Secure Payment...' : 'Placing Order in System...'}</span>`;
+    btn.innerHTML = `<span class="animate-pulse">Preparing Secure Payment...</span>`;
   }
 
   try {
@@ -66,8 +65,8 @@ window.handleCheckoutSubmit = async (e) => {
       throw new Error(result.message || 'Unable to place order.');
     }
 
-    // A. ONLINE PAYMENT VIA RAZORPAY STANDARD CHECKOUT
-    if (paymentMethod === 'RAZORPAY' && result.razorpay) {
+    // ONLINE PAYMENT VIA RAZORPAY STANDARD CHECKOUT
+    if (result.razorpay) {
       if (btn) btn.innerHTML = `<span class="animate-pulse">Opening Razorpay Checkout...</span>`;
 
       try {
@@ -89,27 +88,14 @@ window.handleCheckoutSubmit = async (e) => {
       } catch (rzpErr) {
         console.warn('[Checkout Razorpay Flow]', rzpErr.message);
         if (rzpErr.message === 'PAYMENT_DISMISSED') {
-          checkoutNotice = 'Payment was cancelled. You can retry with Razorpay or choose Cash on Delivery.';
+          checkoutNotice = 'Payment was cancelled. You can retry your payment.';
         } else {
-          checkoutNotice = rzpErr.message || 'Payment could not be completed. Please try again or choose Cash on Delivery.';
+          checkoutNotice = rzpErr.message || 'Payment could not be completed. Please try again.';
         }
         cartStore.notify();
       }
     } else {
-      // B. CASH ON DELIVERY (Immediate Order Confirmation)
-      lastOrderResult = {
-        orderId: result.orderId,
-        customer,
-        amount: state.total,
-        status: 'NEW',
-        paymentStatus: 'PENDING',
-        paymentMethod: 'CASH_ON_DELIVERY',
-        transactionId: 'COD-' + result.orderId.replace('#', '')
-      };
-
-      cartStore.clearCart();
-      currentStep = 'CONFIRMATION';
-      cartStore.notify();
+      throw new Error(result.message || 'Unable to initiate online payment.');
     }
   } catch (err) {
     alert('Checkout error: ' + (err.message || 'Unable to place order.'));
@@ -118,7 +104,7 @@ window.handleCheckoutSubmit = async (e) => {
     const currentBtn = document.getElementById('checkout-submit-btn');
     if (currentBtn && currentStep !== 'CONFIRMATION') {
       const state = cartStore.getState();
-      currentBtn.innerHTML = selectedPaymentMethod === 'RAZORPAY' ? `PAY NOW (&#8377;${state.total})` : `PLACE ORDER (&#8377;${state.total})`;
+      currentBtn.innerHTML = `PAY NOW (&#8377;${state.total})`;
     }
   }
 };
@@ -155,12 +141,12 @@ export function CheckoutModal(state) {
               <div class="flex justify-between"><span>Total Amount:</span> <strong class="font-semibold text-[#0F172A]">&#8377;${lastOrderResult.amount}</strong></div>
               <div class="flex justify-between">
                 <span>Payment Method:</span> 
-                <span class="font-semibold text-[#0F172A]">${lastOrderResult.paymentMethod === 'RAZORPAY' ? 'Razorpay Online' : 'Cash on Delivery'}</span>
+                <span class="font-semibold text-[#0F172A]">${lastOrderResult.paymentMethod === 'RAZORPAY' ? '⚡ Razorpay Online' : 'Online Payment'}</span>
               </div>
               <div class="flex justify-between">
                 <span>Payment Status:</span> 
-                <span class="${lastOrderResult.paymentStatus === 'PAID' ? 'text-emerald-700 font-bold' : 'text-amber-700 font-semibold'}">
-                  ${lastOrderResult.paymentStatus === 'PAID' ? 'PAID ONLINE (Verified ✓)' : 'CASH ON DELIVERY (Pending)'}
+                <span class="text-emerald-700 font-bold">
+                  PAID ONLINE (Verified ✓)
                 </span>
               </div>
               ${lastOrderResult.transactionId ? `
@@ -261,38 +247,18 @@ export function CheckoutModal(state) {
                 </div>
               </div>
 
-              <!-- PAYMENT METHOD SELECTION -->
+              <!-- PAYMENT METHOD (ONLINE PAYMENT VIA RAZORPAY ONLY) -->
               <div class="pt-2">
-                <label class="block text-xs font-semibold uppercase text-[#475569] mb-2">Select Payment Method</label>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  
-                  <!-- RAZORPAY ONLINE OPTION -->
-                  <label class="flex items-start p-3.5 border rounded-xl cursor-pointer transition-all ${selectedPaymentMethod === 'RAZORPAY' ? 'border-[#0F172A] bg-slate-50 ring-1 ring-[#0F172A]' : 'border-[#CBD5E1] bg-white hover:bg-slate-50'}">
-                    <input type="radio" name="paymentMethodRadio" value="RAZORPAY" 
-                           ${selectedPaymentMethod === 'RAZORPAY' ? 'checked' : ''} 
-                           onchange="window.setCheckoutPaymentMethod('RAZORPAY')" 
-                           class="mt-0.5 text-[#0F172A] focus:ring-[#0F172A] mr-3">
-                    <div class="min-w-0 flex-1">
-                      <div class="font-semibold text-xs text-[#0F172A] flex items-center justify-between">
-                        <span>Online Payment</span>
-                        <span class="text-[9px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded">Razorpay</span>
-                      </div>
-                      <div class="text-[11px] text-[#64748B] mt-0.5">UPI, Cards, NetBanking (Test Mode)</div>
+                <label class="block text-xs font-semibold uppercase text-[#475569] mb-2">Payment Method</label>
+                <div class="flex items-start p-3.5 border border-[#0F172A] bg-slate-50 rounded-xl ring-1 ring-[#0F172A]">
+                  <div class="mt-0.5 mr-3 text-emerald-600 font-bold text-sm">🔒</div>
+                  <div class="min-w-0 flex-1">
+                    <div class="font-semibold text-xs text-[#0F172A] flex items-center justify-between">
+                      <span>Online Payment</span>
+                      <span class="text-[9px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded">Razorpay Secure</span>
                     </div>
-                  </label>
-
-                  <!-- CASH ON DELIVERY OPTION -->
-                  <label class="flex items-start p-3.5 border rounded-xl cursor-pointer transition-all ${selectedPaymentMethod === 'CASH_ON_DELIVERY' ? 'border-[#0F172A] bg-slate-50 ring-1 ring-[#0F172A]' : 'border-[#CBD5E1] bg-white hover:bg-slate-50'}">
-                    <input type="radio" name="paymentMethodRadio" value="CASH_ON_DELIVERY" 
-                           ${selectedPaymentMethod === 'CASH_ON_DELIVERY' ? 'checked' : ''} 
-                           onchange="window.setCheckoutPaymentMethod('CASH_ON_DELIVERY')" 
-                           class="mt-0.5 text-[#0F172A] focus:ring-[#0F172A] mr-3">
-                    <div class="min-w-0 flex-1">
-                      <div class="font-semibold text-xs text-[#0F172A]">Cash on Delivery</div>
-                      <div class="text-[11px] text-[#64748B] mt-0.5">Pay in cash when order is delivered</div>
-                    </div>
-                  </label>
-
+                    <div class="text-[11px] text-[#64748B] mt-0.5">UPI, Debit/Credit Cards, NetBanking, Wallets</div>
+                  </div>
                 </div>
               </div>
 
@@ -300,7 +266,7 @@ export function CheckoutModal(state) {
                 <button type="submit" 
                         id="checkout-submit-btn"
                         class="w-full py-4 bg-[#1E293B] text-white text-xs uppercase tracking-[0.2em] font-semibold rounded hover:bg-[#334155] transition-colors shadow-md">
-                  ${selectedPaymentMethod === 'RAZORPAY' ? `PAY NOW (&#8377;${total})` : `PLACE ORDER (&#8377;${total})`}
+                  PAY NOW (&#8377;${total})
                 </button>
                 <div class="text-[10px] text-center text-[#64748B] mt-2">
                   🔒 256-Bit Encrypted Secure Checkout • 100% Free Delivery Pan-India

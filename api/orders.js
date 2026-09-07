@@ -7,7 +7,6 @@
 import { getDatabase } from '../lib/db.js';
 import { verifyAdminToken } from '../lib/auth.js';
 import { createRazorpayOrder, getRazorpayKeys } from '../lib/razorpay.js';
-import { sendOwnerOrderEmail } from '../lib/email.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -79,27 +78,31 @@ export default async function handler(req, res) {
         });
       }
 
+      // Server-side enforcement: Only Razorpay Online Payment is accepted.
+      if (data.paymentMethod && String(data.paymentMethod).toUpperCase() !== 'RAZORPAY') {
+        return res.status(400).json({
+          success: false,
+          message: 'Cash on Delivery is discontinued. Online payment via Razorpay is required.'
+        });
+      }
+
       // Server-side calculation & verification (Delivery is ALWAYS 100% Free - costs included in product prices)
       const calculatedSubtotal = itemsSnapshot.reduce((sum, i) => sum + i.subtotal, 0);
       const subtotal = calculatedSubtotal;
       const shipping = 0; // Strict Business Rule: Delivery charge is ALWAYS ₹0
       const totalAmount = calculatedSubtotal; // Final customer payable amount = subtotal + ₹0 delivery
-      const isRazorpay = String(data.paymentMethod || '').toUpperCase() === 'RAZORPAY';
 
-      let rzpOrder = null;
-      if (isRazorpay) {
-        const amountInPaise = Math.round(totalAmount * 100);
-        rzpOrder = await createRazorpayOrder({
-          amount: amountInPaise,
-          currency: 'INR',
-          receipt: orderId,
-          notes: {
-            orderId,
-            customerEmail: data.customer.email || '',
-            customerPhone: data.customer.phone || ''
-          }
-        });
-      }
+      const amountInPaise = Math.round(totalAmount * 100);
+      const rzpOrder = await createRazorpayOrder({
+        amount: amountInPaise,
+        currency: 'INR',
+        receipt: orderId,
+        notes: {
+          orderId,
+          customerEmail: data.customer.email || '',
+          customerPhone: data.customer.phone || ''
+        }
+      });
 
       const orderDocument = {
         orderId,
@@ -117,14 +120,14 @@ export default async function handler(req, res) {
         shipping,
         discount: 0,
         totalAmount,
-        status: isRazorpay ? 'PENDING_PAYMENT' : 'NEW', // PENDING_PAYMENT | NEW | CONFIRMED | PROCESSING | PACKED | SHIPPED | OUT_FOR_DELIVERY | DELIVERED | CANCELLED
-        paymentStatus: 'PENDING', // PENDING | PAID | FAILED | REFUNDED
-        paymentMethod: isRazorpay ? 'RAZORPAY' : 'CASH_ON_DELIVERY',
-        razorpayOrderId: rzpOrder ? rzpOrder.id : '',
+        status: 'PENDING_PAYMENT',
+        paymentStatus: 'PENDING',
+        paymentMethod: 'RAZORPAY',
+        razorpayOrderId: rzpOrder.id,
         payment: {
-          method: isRazorpay ? 'razorpay' : 'cash_on_delivery',
+          method: 'razorpay',
           status: 'pending',
-          razorpayOrderId: rzpOrder ? rzpOrder.id : '',
+          razorpayOrderId: rzpOrder.id,
           razorpayPaymentId: '',
           signatureVerified: false
         },
@@ -148,30 +151,13 @@ export default async function handler(req, res) {
 
       await ordersCollection.insertOne(orderDocument);
 
-      // For COD orders, decrement stock immediately. For Razorpay, stock is decremented upon payment verification.
-      if (!isRazorpay) {
-        for (const item of itemsSnapshot) {
-          if (item.productId && item.productId !== 'custom') {
-            await productsCollection.updateOne(
-              { id: item.productId, stock: { $gt: 0 } },
-              { $inc: { stock: -item.quantity }, $set: { updatedAt: new Date() } }
-            );
-          }
-        }
-        // Dispatch owner order email notification (non-blocking, idempotent)
-        await sendOwnerOrderEmail(orderDocument, db);
-      }
-
+      const { keyId } = getRazorpayKeys();
       const responsePayload = {
         success: true,
-        message: isRazorpay ? 'Order initiated for Razorpay payment.' : 'Order created successfully.',
+        message: 'Order initiated for Razorpay payment.',
         orderId,
-        order: orderDocument
-      };
-
-      if (isRazorpay && rzpOrder) {
-        const { keyId } = getRazorpayKeys();
-        responsePayload.razorpay = {
+        order: orderDocument,
+        razorpay: {
           keyId,
           orderId: rzpOrder.id,
           amount: rzpOrder.amount,
@@ -183,8 +169,8 @@ export default async function handler(req, res) {
             email: orderDocument.customer.email,
             contact: orderDocument.customer.phone
           }
-        };
-      }
+        }
+      };
 
       return res.status(201).json(responsePayload);
     }

@@ -6,6 +6,7 @@
 
 import { getDatabase } from '../lib/db.js';
 import { verifyWebhookSignature } from '../lib/razorpay.js';
+import { sendOwnerOrderEmail } from '../lib/email.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -120,6 +121,9 @@ export default async function handler(req, res) {
           }
         }
       }
+
+      const updatedOrder = await ordersCollection.findOne({ orderId: order.orderId });
+      await sendOwnerOrderEmail(updatedOrder, db);
 
       return res.status(200).json({ received: true, status: 'order_marked_paid', orderId: order.orderId });
     }

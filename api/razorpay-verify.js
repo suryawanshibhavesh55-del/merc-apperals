@@ -6,6 +6,7 @@
 
 import { getDatabase } from '../lib/db.js';
 import { verifyPaymentSignature } from '../lib/razorpay.js';
+import { sendOwnerOrderEmail } from '../lib/email.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -116,6 +117,7 @@ export default async function handler(req, res) {
     }
 
     const updatedOrder = await ordersCollection.findOne({ orderId });
+    await sendOwnerOrderEmail(updatedOrder, db);
 
     return res.status(200).json({
       success: true,

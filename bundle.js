@@ -343,6 +343,11 @@ const CORPORATE_LOGOS = [
     id: "logo-11",
     name: "RR Kabel / RR Global",
     image: "assets/client_logos/rr-kabel.png"
+  },
+  {
+    id: "logo-12",
+    name: "GoSports Foundation",
+    image: "assets/client_logos/gosports-foundation.png"
   }
 ];
 
@@ -4763,14 +4768,14 @@ function TrustedClients() {
         </div>
 
         <!-- CORPORATE CLIENT LOGOS GRID -->
-        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-4 sm:gap-6">
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-3.5 sm:gap-5 md:gap-6">
           ${CORPORATE_LOGOS.map(logo => `
-            <div class="group bg-white rounded-xl border border-[#E2E9F0] p-6 h-28 sm:h-32 flex items-center justify-center shadow-xs hover:shadow-md hover:border-[#CBD5E1] transition-all duration-300">
+            <div class="group bg-white rounded-xl border border-[#E2E9F0] p-4 sm:p-5 md:p-6 h-24 sm:h-28 md:h-32 flex items-center justify-center shadow-xs hover:shadow-md hover:border-[#CBD5E1] transition-all duration-300">
               <img src="${logo.image}" 
                    alt="${logo.name}" 
                    title="${logo.name}"
                    loading="lazy"
-                   class="max-h-14 sm:max-h-16 max-w-[85%] object-contain opacity-85 group-hover:opacity-100 group-hover:scale-105 transition-all duration-300">
+                   class="w-auto h-auto max-h-12 sm:max-h-14 md:max-h-16 max-w-[85%] sm:max-w-[82%] object-contain opacity-90 group-hover:opacity-100 group-hover:scale-105 transition-all duration-300 select-none">
             </div>
           `).join('')}
         </div>

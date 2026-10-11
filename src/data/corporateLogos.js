@@ -57,5 +57,10 @@ export const CORPORATE_LOGOS = [
     id: "logo-11",
     name: "RR Kabel / RR Global",
     image: "assets/client_logos/rr-kabel.png"
+  },
+  {
+    id: "logo-12",
+    name: "GoSports Foundation",
+    image: "assets/client_logos/gosports-foundation.png"
   }
 ];
